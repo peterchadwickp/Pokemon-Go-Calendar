@@ -5,7 +5,6 @@ to a dedicated Google Calendar. Idempotent — re-running won't duplicate events
 """
 
 import os
-import json
 import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -18,11 +17,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("pogo-sync")
 
 # --- config ---
-EVENTS_URL = "https://raw.githubusercontent.com/bigfoot71/pokemon-go-events/main/events.json"
-# Fallback to the original ScrapedDuck source if the above ever moves:
-FALLBACK_URL = "https://raw.githubusercontent.com/bigfoot71/pokemon-go-events/master/events.json"
-LEEKDUCK_URL = "https://raw.githubusercontent.com/bigfoot71/pokemon-go-events/main/events.json"
-SCRAPEDDUCK_URL = "https://github-rwm.github.io/ScrapedDuck/events.json"
+# Primary source: ScrapedDuck (scrapes LeekDuck.com)
+# Data lives on the 'data' branch of bigfoott/ScrapedDuck
+SCRAPEDDUCK_URL = "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/events.json"
 
 LOCAL_TZ = ZoneInfo("America/Toronto")
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
@@ -50,19 +47,13 @@ INCLUDED_TYPES = {
 
 
 def fetch_events():
-    """Try ScrapedDuck first, fall back to other mirrors if needed."""
-    urls = [SCRAPEDDUCK_URL, LEEKDUCK_URL, FALLBACK_URL]
-    for url in urls:
-        try:
-            log.info("Fetching events from %s", url)
-            r = requests.get(url, timeout=30)
-            r.raise_for_status()
-            data = r.json()
-            log.info("Got %d events", len(data))
-            return data
-        except Exception as e:
-            log.warning("Failed to fetch from %s: %s", url, e)
-    raise RuntimeError("Could not fetch events from any source")
+    """Fetch events from ScrapedDuck."""
+    log.info("Fetching events from %s", SCRAPEDDUCK_URL)
+    r = requests.get(SCRAPEDDUCK_URL, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    log.info("Got %d events", len(data))
+    return data
 
 
 def get_calendar_service():
