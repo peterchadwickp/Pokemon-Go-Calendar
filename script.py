@@ -156,7 +156,7 @@ def is_future(event):
 
 
 def sync():
-    calendar_id = os.environ["GOOGLE_CALENDAR_ID"]
+    calendar_id = os.environ["GOOGLE_CALENDAR_ID"].strip()
     service = get_calendar_service()
 
     events = fetch_events()
