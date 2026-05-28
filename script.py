@@ -24,25 +24,46 @@ SCRAPEDDUCK_URL = "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/e
 LOCAL_TZ = ZoneInfo("America/Toronto")
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 
-# Event types we want. ScrapedDuck uses these heading types:
-# community-day, spotlight-hour, raid-hour, raid-day, raid-battles,
-# pokemon-go-fest, research, season, event, ticketed-event, elite-raids, go-battle-league
-INCLUDED_TYPES = {
+# Event types that are reliably global — happen worldwide at the same time
+# (either same local time everywhere, or same UTC moment).
+GLOBAL_EVENT_TYPES = {
     "community-day",
     "spotlight-hour",
     "raid-hour",
     "raid-day",
     "raid-battles",
     "elite-raids",
-    "pokemon-go-fest",
     "research",
     "research-day",
     "season",
     "event",
     "ticketed-event",
+}
+
+# Event types that are usually in-person/location-specific.
+# We skip these unless the name explicitly says "global".
+LOCATION_SPECIFIC_TYPES = {
     "live-event",
     "safari-zone",
     "go-tour",
+    "city-safari",
+    "pokemon-go-fest",  # GO Fest has both global and city versions
+}
+
+# Words in event names that strongly suggest an in-person/regional event,
+# even if the type looks global. Used as a secondary filter.
+LOCATION_SPECIFIC_NAME_HINTS = {
+    "fossil museum",
+    "pop-up",
+    "in-person",
+    "ticketed",
+    "city safari",
+}
+
+# Words that confirm an event is for everyone, even if its type is normally local.
+GLOBAL_NAME_HINTS = {
+    "global",
+    "worldwide",
 }
 
 
@@ -136,14 +157,45 @@ def build_calendar_event(event):
     }
 
 
+def name_suggests_global(event):
+    name = (event.get("name") or "").lower()
+    heading = (event.get("heading") or "").lower()
+    text = f"{name} {heading}"
+    return any(hint in text for hint in GLOBAL_NAME_HINTS)
+
+
+def name_suggests_local(event):
+    name = (event.get("name") or "").lower()
+    heading = (event.get("heading") or "").lower()
+    text = f"{name} {heading}"
+    return any(hint in text for hint in LOCATION_SPECIFIC_NAME_HINTS)
+
+
 def should_include(event):
     event_type = (event.get("eventType") or "").lower()
     heading = (event.get("heading") or "").lower()
-    if event_type in INCLUDED_TYPES:
+
+    # If the name explicitly says "global", include it regardless of type.
+    if name_suggests_global(event):
         return True
-    # Some events use heading instead of eventType
-    if any(t in heading for t in INCLUDED_TYPES):
+
+    # If the name hints at being in-person/location-specific, skip it.
+    if name_suggests_local(event):
+        return False
+
+    # Location-specific types only get included if they said "global" above.
+    if event_type in LOCATION_SPECIFIC_TYPES:
+        return False
+    if any(t in heading for t in LOCATION_SPECIFIC_TYPES):
+        return False
+
+    # Otherwise include if it's a known global type.
+    if event_type in GLOBAL_EVENT_TYPES:
         return True
+    if any(t in heading for t in GLOBAL_EVENT_TYPES):
+        return True
+
+    # Unknown type — default to skip. Better to miss an event than spam the calendar.
     return False
 
 
